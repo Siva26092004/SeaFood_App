@@ -1,0 +1,701 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  Image,
+  Switch,
+  ActionSheetIOS,
+  Platform,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { APP_CONSTANTS } from '../../utils/constants';
+import { Ionicons } from '@expo/vector-icons';
+import { Product, CreateProductData, productService } from '../../services/productService';
+import { cloudinaryService } from '../../services/cloudinaryService';
+
+interface AddEditProductScreenProps {
+  navigation: any;
+  route?: {
+    params?: {
+      product?: Product;
+    };
+  };
+}
+
+export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({ 
+  navigation, 
+  route 
+}) => {
+  const isEditing = !!route?.params?.product;
+  const existingProduct = route?.params?.product;
+
+  const [formData, setFormData] = useState<CreateProductData>({
+    name: '',
+    description: '',
+    price: 0,
+    category: 'Fresh Fish',
+    image_url: '',
+    stock_quantity: 0,
+    unit: 'kg',
+    is_available: true,
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imagePickerLoading, setImagePickerLoading] = useState(false);
+  const [uploadingToCloudinary, setUploadingToCloudinary] = useState(false);
+
+  const categories = [
+    'Fresh Fish',
+    'Prawns & Shrimp',
+    'Crabs',
+    'Dried Fish',
+    'Fish Curry Cut',
+  ];
+
+  const units = ['kg', 'piece', 'gram'];
+
+  useEffect(() => {
+    if (isEditing && existingProduct) {
+      setFormData({
+        name: existingProduct.name,
+        description: existingProduct.description,
+        price: existingProduct.price,
+        category: existingProduct.category,
+        image_url: existingProduct.image_url || '',
+        stock_quantity: existingProduct.stock_quantity,
+        unit: existingProduct.unit,
+        is_available: existingProduct.is_available,
+      });
+      
+      // Set the selected image for editing mode
+      if (existingProduct.image_url) {
+        setSelectedImage(existingProduct.image_url);
+      }
+    }
+  }, [isEditing, existingProduct]);
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Product name is required';
+    }
+
+    if (!formData.description.trim()) {
+      newErrors.description = 'Description is required';
+    }
+
+    if (!formData.price || formData.price <= 0) {
+      newErrors.price = 'Price must be greater than 0';
+    }
+
+    if (!formData.stock_quantity || formData.stock_quantity < 0) {
+      newErrors.stock_quantity = 'Stock quantity cannot be negative';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      if (isEditing && existingProduct) {
+        await productService.updateProduct(existingProduct.id, formData);
+        Alert.alert('Success', 'Product updated successfully');
+      } else {
+        await productService.createProduct(formData);
+        Alert.alert('Success', 'Product created successfully');
+      }
+
+      navigation.goBack();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to save product');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateFormData = (field: keyof CreateProductData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const requestPermissions = async () => {
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status: galleryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (cameraStatus !== 'granted' || galleryStatus !== 'granted') {
+      Alert.alert(
+        'Permissions Required',
+        'Please grant camera and gallery permissions to add product images.',
+        [{ text: 'OK' }]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const uploadImageToCloudinary = async (imageUri: string): Promise<string> => {
+    try {
+      setUploadingToCloudinary(true);
+      console.log('📤 Uploading image to Cloudinary:', imageUri);
+      
+      const cloudinaryUrl = await cloudinaryService.uploadImage(imageUri, {
+        folder: 'products',
+        tags: ['product', 'fishmarket'],
+      });
+      
+      console.log('✅ Image uploaded to Cloudinary:', cloudinaryUrl);
+      return cloudinaryUrl;
+    } catch (error: any) {
+      console.error('❌ Cloudinary upload failed:', error);
+      Alert.alert(
+        'Upload Failed',
+        'Failed to upload image to cloud storage. Please try again.',
+        [{ text: 'OK' }]
+      );
+      throw error;
+    } finally {
+      setUploadingToCloudinary(false);
+    }
+  };
+
+  const pickImageFromCamera = async () => {
+    try {
+      setImagePickerLoading(true);
+      const hasPermissions = await requestPermissions();
+      if (!hasPermissions) return;
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const localImageUri = result.assets[0].uri;
+        setSelectedImage(localImageUri);
+        
+        // Upload to Cloudinary in the background
+        try {
+          const cloudinaryUrl = await uploadImageToCloudinary(localImageUri);
+          updateFormData('image_url', cloudinaryUrl);
+          setSelectedImage(cloudinaryUrl);
+          
+          Alert.alert(
+            'Success',
+            'Image uploaded successfully to cloud storage!',
+            [{ text: 'OK' }]
+          );
+        } catch (error) {
+          // Keep the local image if Cloudinary upload fails
+          updateFormData('image_url', localImageUri);
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to take photo');
+    } finally {
+      setImagePickerLoading(false);
+    }
+  };
+
+  const pickImageFromGallery = async () => {
+    try {
+      setImagePickerLoading(true);
+      const hasPermissions = await requestPermissions();
+      if (!hasPermissions) return;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const localImageUri = result.assets[0].uri;
+        setSelectedImage(localImageUri);
+        
+        // Upload to Cloudinary in the background
+        try {
+          const cloudinaryUrl = await uploadImageToCloudinary(localImageUri);
+          updateFormData('image_url', cloudinaryUrl);
+          setSelectedImage(cloudinaryUrl);
+          
+          Alert.alert(
+            'Success',
+            'Image uploaded successfully to cloud storage!',
+            [{ text: 'OK' }]
+          );
+        } catch (error) {
+          // Keep the local image if Cloudinary upload fails
+          updateFormData('image_url', localImageUri);
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image');
+    } finally {
+      setImagePickerLoading(false);
+    }
+  };
+
+  const showImagePickerOptions = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Take Photo', 'Choose from Gallery'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            pickImageFromCamera();
+          } else if (buttonIndex === 2) {
+            pickImageFromGallery();
+          }
+        }
+      );
+    } else {
+      Alert.alert(
+        'Select Image',
+        'Choose how you want to add a product image',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Take Photo', onPress: pickImageFromCamera },
+          { text: 'Choose from Gallery', onPress: pickImageFromGallery },
+        ]
+      );
+    }
+  };
+
+  const renderInput = (
+    label: string,
+    field: keyof CreateProductData,
+    placeholder: string,
+    keyboardType: 'default' | 'numeric' | 'email-address' = 'default',
+    multiline: boolean = false
+  ) => (
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={[
+          styles.input,
+          multiline && styles.multilineInput,
+          errors[field] && styles.inputError,
+        ]}
+        placeholder={placeholder}
+        value={String(formData[field])}
+        onChangeText={(text) => {
+          const value = keyboardType === 'numeric' ? parseFloat(text) || 0 : text;
+          updateFormData(field, value);
+        }}
+        keyboardType={keyboardType}
+        multiline={multiline}
+        placeholderTextColor={APP_CONSTANTS.COLORS.TEXT_SECONDARY}
+      />
+      {errors[field] && <Text style={styles.errorText}>{errors[field]}</Text>}
+    </View>
+  );
+
+  const renderPicker = (
+    label: string,
+    field: keyof CreateProductData,
+    options: string[]
+  ) => (
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.pickerContainer}>
+        {options.map((option) => (
+          <TouchableOpacity
+            key={option}
+            style={[
+              styles.pickerOption,
+              formData[field] === option && styles.selectedPickerOption,
+            ]}
+            onPress={() => updateFormData(field, option)}
+          >
+            <Text
+              style={[
+                styles.pickerOptionText,
+                formData[field] === option && styles.selectedPickerOptionText,
+              ]}
+            >
+              {option}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={APP_CONSTANTS.COLORS.TEXT_PRIMARY} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {isEditing ? 'Edit Product' : 'Add New Product'}
+        </Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Product Image Preview */}
+        <View style={styles.imageSection}>
+          <Text style={styles.label}>Product Image</Text>
+          <View style={styles.imageContainer}>
+            <Image
+              source={{
+                uri: selectedImage || formData.image_url || 'https://via.placeholder.com/150x150/CCCCCC/FFFFFF?text=No+Image',
+              }}
+              style={styles.imagePreview}
+            />
+            <TouchableOpacity 
+              style={[
+                styles.imagePickerButton, 
+                (imagePickerLoading || uploadingToCloudinary) && styles.imagePickerButtonDisabled
+              ]}
+              onPress={showImagePickerOptions}
+              disabled={imagePickerLoading || uploadingToCloudinary}
+            >
+              <Ionicons 
+                name={
+                  uploadingToCloudinary ? "cloud-upload-outline" : 
+                  imagePickerLoading ? "hourglass-outline" : 
+                  "camera"
+                } 
+                size={24} 
+                color={APP_CONSTANTS.COLORS.PRIMARY} 
+              />
+              <Text style={styles.imagePickerText}>
+                {uploadingToCloudinary ? 'Uploading to Cloud...' :
+                 imagePickerLoading ? 'Processing...' : 
+                 (selectedImage || formData.image_url ? 'Change Image' : 'Add Image')}
+              </Text>
+            </TouchableOpacity>
+            
+            {(selectedImage || formData.image_url) && (
+              <TouchableOpacity 
+                style={styles.removeImageButton}
+                onPress={() => {
+                  setSelectedImage(null);
+                  updateFormData('image_url', '');
+                }}
+              >
+                <Ionicons name="trash-outline" size={16} color="#F44336" />
+                <Text style={styles.removeImageText}>Remove Image</Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.manualUrlButton}
+              onPress={() => {
+                if (Platform.OS === 'ios') {
+                  Alert.prompt(
+                    'Image URL',
+                    'Enter image URL manually (optional)',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'OK',
+                        onPress: async (url) => {
+                          if (url && url.trim()) {
+                            const trimmedUrl = url.trim();
+                            
+                            // If it's already a Cloudinary or external URL, use it directly
+                            if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+                              setSelectedImage(trimmedUrl);
+                              updateFormData('image_url', trimmedUrl);
+                            } else {
+                              // If it's a local path, try to upload to Cloudinary
+                              try {
+                                const cloudinaryUrl = await uploadImageToCloudinary(trimmedUrl);
+                                setSelectedImage(cloudinaryUrl);
+                                updateFormData('image_url', cloudinaryUrl);
+                              } catch (error) {
+                                setSelectedImage(trimmedUrl);
+                                updateFormData('image_url', trimmedUrl);
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    'plain-text',
+                    formData.image_url
+                  );
+                } else {
+                  // For Android, we'll just show an info message
+                  Alert.alert(
+                    'Manual URL Entry',
+                    'Manual URL entry is available on iOS. For Android, please use camera or gallery options.',
+                    [{ text: 'OK' }]
+                  );
+                }
+              }}
+            >
+              <Ionicons name="link-outline" size={16} color={APP_CONSTANTS.COLORS.TEXT_SECONDARY} />
+              <Text style={styles.manualUrlText}>Add URL manually</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {renderInput('Product Name', 'name', 'Enter product name')}
+        {renderInput('Description', 'description', 'Enter product description', 'default', true)}
+        {renderInput('Price (₹)', 'price', 'Enter price', 'numeric')}
+        {renderInput('Stock Quantity', 'stock_quantity', 'Enter stock quantity', 'numeric')}
+
+        {renderPicker('Category', 'category', categories)}
+        {renderPicker('Unit', 'unit', units)}
+
+        {/* Availability Toggle */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Availability</Text>
+          <View style={styles.switchContainer}>
+            <Switch
+              value={formData.is_available}
+              onValueChange={(value) => updateFormData('is_available', value)}
+              trackColor={{
+                false: APP_CONSTANTS.COLORS.BORDER,
+                true: APP_CONSTANTS.COLORS.PRIMARY,
+              }}
+              thumbColor={formData.is_available ? '#FFFFFF' : '#F4F3F4'}
+            />
+            <Text style={styles.switchLabel}>
+              {formData.is_available ? 'Available for sale' : 'Not available'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            <Text style={styles.saveButtonText}>
+              {loading ? 'Saving...' : (isEditing ? 'Update Product' : 'Add Product')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: APP_CONSTANTS.COLORS.BACKGROUND,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: APP_CONSTANTS.SIZES.PADDING,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: APP_CONSTANTS.COLORS.BORDER,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+    textAlign: 'center',
+    marginLeft: -40, // Compensate for back button
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  content: {
+    flex: 1,
+    padding: APP_CONSTANTS.SIZES.PADDING,
+  },
+  imageSection: {
+    marginBottom: 24,
+  },
+  imageContainer: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  imagePreview: {
+    width: 150,
+    height: 150,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  imagePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: APP_CONSTANTS.COLORS.PRIMARY,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  imagePickerButtonDisabled: {
+    opacity: 0.6,
+  },
+  imagePickerText: {
+    marginLeft: 8,
+    color: APP_CONSTANTS.COLORS.PRIMARY,
+    fontWeight: '600',
+  },
+  removeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  removeImageText: {
+    marginLeft: 4,
+    color: '#F44336',
+    fontSize: 14,
+  },
+  manualUrlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  manualUrlText: {
+    marginLeft: 4,
+    color: APP_CONSTANTS.COLORS.TEXT_SECONDARY,
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: APP_CONSTANTS.COLORS.BORDER,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+    backgroundColor: '#FFFFFF',
+  },
+  multilineInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  inputError: {
+    borderColor: '#F44336',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#F44336',
+    marginTop: 4,
+  },
+  pickerContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pickerOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: APP_CONSTANTS.COLORS.BORDER,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  selectedPickerOption: {
+    backgroundColor: APP_CONSTANTS.COLORS.PRIMARY,
+    borderColor: APP_CONSTANTS.COLORS.PRIMARY,
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+  },
+  selectedPickerOptionText: {
+    color: '#FFFFFF',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  switchLabel: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 32,
+    marginBottom: 32,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: APP_CONSTANTS.COLORS.BORDER,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 16,
+    backgroundColor: APP_CONSTANTS.COLORS.PRIMARY,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+});
