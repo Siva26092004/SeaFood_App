@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
-  Alert,
   Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -19,6 +18,8 @@ import { fetchCartItems, updateCartItem, removeFromCart } from '../../store/cart
 import { APP_CONSTANTS } from '../../utils/constants';
 import { CustomerStackParamList } from '../../types/navigation';
 import { CartItem } from '../../services/cartService';
+import { CustomModal, ToastModal } from '../../components/modals';
+import { useModal } from '../../hooks/useModal';
 
 type NavigationProp = StackNavigationProp<CustomerStackParamList>;
 
@@ -37,6 +38,17 @@ export const CartScreen: React.FC = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const { items, totalPrice, totalItems, isLoading } = useAppSelector((state) => state.cart);
+
+  const { 
+    showModal, 
+    isModalVisible, 
+    modalProps, 
+    hideModal,
+    showToast, 
+    isToastVisible, 
+    toastProps, 
+    hideToast 
+  } = useModal();
 
   const [selectedItemForWeightUpdate, setSelectedItemForWeightUpdate] = useState<string | null>(null);
   const [showWeightModal, setShowWeightModal] = useState(false);
@@ -66,7 +78,7 @@ export const CartScreen: React.FC = () => {
   const handleUpdateQuantity = async (cartItemId: string, newQuantity: number) => {
     // Enforce minimum weight
     if (newQuantity > 0 && newQuantity < MIN_WEIGHT) {
-      Alert.alert('Minimum Order', `Minimum order quantity is ${formatWeight(MIN_WEIGHT)}`);
+      showModal('Minimum Order', `Minimum order quantity is ${formatWeight(MIN_WEIGHT)}`, 'warning');
       return;
     }
 
@@ -81,7 +93,7 @@ export const CartScreen: React.FC = () => {
         updates: { quantity: newQuantity }
       })).unwrap();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update quantity');
+      showModal('Error', error.message || 'Failed to update quantity', 'error');
     }
   };
 
@@ -99,11 +111,11 @@ export const CartScreen: React.FC = () => {
 
   const handleCheckout = () => {
     if (items.length === 0) {
-      Alert.alert('Error', 'Your cart is empty');
+      showModal('Error', 'Your cart is empty', 'warning');
       return;
     }
     if (!user?.id) {
-      Alert.alert('Error', 'Please log in to proceed with checkout');
+      showModal('Error', 'Please log in to proceed with checkout', 'error');
       return;
     }
     navigation.navigate('Checkout');
@@ -112,9 +124,9 @@ export const CartScreen: React.FC = () => {
   const handleRemoveItem = async (cartItemId: string) => {
     try {
       await dispatch(removeFromCart(cartItemId)).unwrap();
-      Alert.alert('Success', 'Item removed from cart');
+      showToast('Item removed from cart', 'success');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to remove item');
+      showModal('Error', error.message || 'Failed to remove item', 'error');
     }
   };
 
@@ -280,6 +292,22 @@ export const CartScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+      
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
+      
+      <ToastModal
+        visible={isToastVisible}
+        message={toastProps.message}
+        type={toastProps.type}
+        duration={toastProps.duration}
+        onHide={hideToast}
+      />
     </View>
   );
 };

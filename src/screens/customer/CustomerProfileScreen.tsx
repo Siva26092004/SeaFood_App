@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -15,6 +14,10 @@ import { logoutUser } from '../../store/authSlice';
 import { fetchProfile, updateProfile } from '../../store/profileSlice';
 import { APP_CONSTANTS } from '../../utils/constants';
 import { CustomerStackParamList } from '../../types/navigation';
+import { useModal } from '../../hooks/useModal';
+import CustomModal from '../../components/modals/CustomModal';
+import ConfirmModal from '../../components/modals/ConfirmModal';
+import ToastModal from '../../components/modals/ToastModal';
 
 type NavigationProp = StackNavigationProp<CustomerStackParamList>;
 
@@ -23,6 +26,22 @@ export const CustomerProfileScreen: React.FC = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const { profile, isLoading: profileLoading } = useAppSelector((state) => state.profile);
+
+  // Modal hook for managing all modal states
+  const {
+    showModal,
+    showConfirm,
+    showToast,
+    isModalVisible,
+    modalProps,
+    hideModal,
+    isConfirmVisible,
+    confirmProps,
+    hideConfirm,
+    isToastVisible,
+    toastProps,
+    hideToast,
+  } = useModal();
 
   // Fetch profile data when component mounts
   useEffect(() => {
@@ -67,7 +86,7 @@ export const CustomerProfileScreen: React.FC = () => {
 
   const handleFixProfile = async () => {
     if (!user?.id || !user?.full_name) {
-      Alert.alert('Error', 'Cannot fix profile - missing user data');
+      showModal('Error', 'Cannot fix profile - missing user data', 'error');
       return;
     }
 
@@ -82,38 +101,31 @@ export const CustomerProfileScreen: React.FC = () => {
       })).unwrap();
       
       console.log('✅ CustomerProfileScreen - Profile fixed successfully');
-      Alert.alert('Success', 'Profile has been repaired with your login information!');
+      showToast('Profile has been repaired with your login information!', 'success');
     } catch (error: any) {
       console.error('❌ CustomerProfileScreen - Failed to fix profile:', error);
-      Alert.alert('Error', 'Failed to fix profile: ' + error.message);
+      showModal('Error', 'Failed to fix profile: ' + error.message, 'error');
     }
   };
 
   const handleLogout = () => {
-    Alert.alert(
+    showConfirm(
       'Logout',
       'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: () => {
-            console.log('👤 CustomerProfileScreen - User initiated logout');
-            dispatch(logoutUser());
-          }
-        },
-      ]
+      () => {
+        console.log('👤 CustomerProfileScreen - User initiated logout');
+        dispatch(logoutUser());
+      },
+      'warning',
+      'Logout',
+      'Cancel'
     );
   };
 
   const menuItems = [
     { icon: 'person-outline', title: 'Edit Profile', onPress: () => navigation.navigate('EditProfile') },
-    { icon: 'location-outline', title: 'Addresses', onPress: () => {} },
-    { icon: 'card-outline', title: 'Payment Methods', onPress: () => {} },
-    { icon: 'notifications-outline', title: 'Notifications', onPress: () => {} },
     { icon: 'help-circle-outline', title: 'Help & Support', onPress: () => {} },
-    { icon: 'information-circle-outline', title: 'About', onPress: () => {} },
+    { icon: 'information-circle-outline', title: 'About Us', onPress: () => {} },
   ];
 
   return (
@@ -171,6 +183,33 @@ export const CustomerProfileScreen: React.FC = () => {
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Modal Components */}
+      <CustomModal
+        visible={isModalVisible}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+        onClose={hideModal}
+      />
+      
+      <ConfirmModal
+        visible={isConfirmVisible}
+        title={confirmProps.title}
+        message={confirmProps.message}
+        type={confirmProps.type}
+        confirmText={confirmProps.confirmText}
+        cancelText={confirmProps.cancelText}
+        onConfirm={confirmProps.onConfirm}
+        onClose={hideConfirm}
+      />
+      
+      <ToastModal
+        visible={isToastVisible}
+        message={toastProps.message}
+        type={toastProps.type}
+        onHide={hideToast}
+      />
     </ScrollView>
   );
 };

@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,12 +17,15 @@ import { LoginCredentials } from '../types/auth';
 import { AuthStackParamList } from '../types/navigation';
 import { APP_CONSTANTS } from '../utils/constants';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { CustomModal } from '../components/modals';
+import { useModal } from '../hooks/useModal';
 
 type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { isLoading, error, isAuthenticated } = useAppSelector((state) => state.auth);
+  const { showModal, isModalVisible, modalProps, hideModal } = useModal();
   
   const [formData, setFormData] = useState({
     email: '',
@@ -43,7 +45,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   useEffect(() => {
     if (error) {
       console.error('📱 LoginScreen - Error received:', error);
-      Alert.alert('Login Failed', error);
+      showModal('Login Failed', error, 'error');
       dispatch(clearError());
     }
   }, [error]);
@@ -65,7 +67,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
     if (!formData.email || !formData.password) {
       console.warn('📱 LoginScreen - Validation failed: Missing fields');
-      Alert.alert('Error', 'Please fill in all fields');
+      showModal('Error', 'Please fill in all fields', 'error');
       return;
     }
 
@@ -172,6 +174,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
     </KeyboardAvoidingView>
   );
 };

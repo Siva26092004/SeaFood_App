@@ -8,7 +8,6 @@ import {
   Image,
   TextInput,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -26,6 +25,8 @@ import { addToCart } from '../../store/cartSlice';
 import { APP_CONSTANTS } from '../../utils/constants';
 import { CustomerStackParamList } from '../../types/navigation';
 import { Product } from '../../services/productService';
+import { CustomModal, ToastModal } from '../../components/modals';
+import { useModal } from '../../hooks/useModal';
 
 type NavigationProp = StackNavigationProp<CustomerStackParamList>;
 
@@ -49,6 +50,17 @@ export const ProductCatalogScreen: React.FC = () => {
     isLoading, 
     error 
   } = useAppSelector((state) => state.products);
+  
+  const { 
+    showModal, 
+    isModalVisible, 
+    modalProps, 
+    hideModal,
+    showToast, 
+    isToastVisible, 
+    toastProps, 
+    hideToast 
+  } = useModal();
   
   const [refreshing, setRefreshing] = useState(false);
 
@@ -79,7 +91,7 @@ export const ProductCatalogScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ ProductCatalogScreen - Error loading products:', error);
-      Alert.alert('Error', 'Failed to load products. Please try again.');
+      showModal('Error', 'Failed to load products. Please try again.', 'error');
     }
   };
 
@@ -118,12 +130,12 @@ export const ProductCatalogScreen: React.FC = () => {
     });
 
     if (!user?.id) {
-      Alert.alert('Error', 'Please log in to add items to cart');
+      showModal('Error', 'Please log in to add items to cart', 'error');
       return;
     }
 
     if (product.stock_quantity === 0 || !product.is_available) {
-      Alert.alert('Error', 'This product is currently out of stock');
+      showModal('Error', 'This product is currently out of stock', 'warning');
       return;
     }
 
@@ -138,10 +150,10 @@ export const ProductCatalogScreen: React.FC = () => {
       })).unwrap();
       
       console.log('✅ ProductCatalogScreen - Add to cart successful:', result);
-      Alert.alert('Success', `${product.name} (1kg) added to cart!`);
+      showToast(`${product.name} (1kg) added to cart!`, 'success');
     } catch (error: any) {
       console.error('❌ ProductCatalogScreen - Add to cart failed:', error);
-      Alert.alert('Error', error.message || 'Failed to add item to cart');
+      showModal('Error', error.message || 'Failed to add item to cart', 'error');
     }
   };
 
@@ -280,6 +292,22 @@ export const ProductCatalogScreen: React.FC = () => {
             </Text>
           </View>
         }
+      />
+      
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
+      
+      <ToastModal
+        visible={isToastVisible}
+        message={toastProps.message}
+        type={toastProps.type}
+        duration={toastProps.duration}
+        onHide={hideToast}
       />
     </View>
   );

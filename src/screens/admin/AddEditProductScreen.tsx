@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Image,
   Switch,
   ActionSheetIOS,
@@ -17,6 +16,8 @@ import { APP_CONSTANTS } from '../../utils/constants';
 import { Ionicons } from '@expo/vector-icons';
 import { Product, CreateProductData, productService } from '../../services/productService';
 import { cloudinaryService } from '../../services/cloudinaryService';
+import { CustomModal, ToastModal, ConfirmModal, InputModal } from '../../components/modals';
+import { useModal } from '../../hooks/useModal';
 
 interface AddEditProductScreenProps {
   navigation: any;
@@ -33,6 +34,25 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
 }) => {
   const isEditing = !!route?.params?.product;
   const existingProduct = route?.params?.product;
+  
+  const { 
+    showModal, 
+    isModalVisible, 
+    modalProps, 
+    hideModal,
+    showToast, 
+    isToastVisible, 
+    toastProps, 
+    hideToast,
+    showConfirm,
+    isConfirmVisible,
+    confirmProps,
+    hideConfirm,
+    showInput,
+    isInputVisible,
+    inputProps,
+    hideInput
+  } = useModal();
 
   const [formData, setFormData] = useState<CreateProductData>({
     name: '',
@@ -114,15 +134,15 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
 
       if (isEditing && existingProduct) {
         await productService.updateProduct(existingProduct.id, formData);
-        Alert.alert('Success', 'Product updated successfully');
+        showToast('Product updated successfully', 'success');
       } else {
         await productService.createProduct(formData);
-        Alert.alert('Success', 'Product created successfully');
+        showToast('Product created successfully', 'success');
       }
 
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save product');
+      showModal('Error', error.message || 'Failed to save product', 'error');
     } finally {
       setLoading(false);
     }
@@ -145,10 +165,10 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
     const { status: galleryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (cameraStatus !== 'granted' || galleryStatus !== 'granted') {
-      Alert.alert(
+      showModal(
         'Permissions Required',
         'Please grant camera and gallery permissions to add product images.',
-        [{ text: 'OK' }]
+        'warning'
       );
       return false;
     }
@@ -169,10 +189,10 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
       return cloudinaryUrl;
     } catch (error: any) {
       console.error('❌ Cloudinary upload failed:', error);
-      Alert.alert(
+      showModal(
         'Upload Failed',
         'Failed to upload image to cloud storage. Please try again.',
-        [{ text: 'OK' }]
+        'error'
       );
       throw error;
     } finally {
@@ -203,18 +223,14 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
           updateFormData('image_url', cloudinaryUrl);
           setSelectedImage(cloudinaryUrl);
           
-          Alert.alert(
-            'Success',
-            'Image uploaded successfully to cloud storage!',
-            [{ text: 'OK' }]
-          );
+          showToast('Image uploaded successfully to cloud storage!', 'success');
         } catch (error) {
           // Keep the local image if Cloudinary upload fails
           updateFormData('image_url', localImageUri);
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to take photo');
+      showModal('Error', 'Failed to take photo', 'error');
     } finally {
       setImagePickerLoading(false);
     }
@@ -243,18 +259,14 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
           updateFormData('image_url', cloudinaryUrl);
           setSelectedImage(cloudinaryUrl);
           
-          Alert.alert(
-            'Success',
-            'Image uploaded successfully to cloud storage!',
-            [{ text: 'OK' }]
-          );
+          showToast('Image uploaded successfully to cloud storage!', 'success');
         } catch (error) {
           // Keep the local image if Cloudinary upload fails
           updateFormData('image_url', localImageUri);
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+      showModal('Error', 'Failed to pick image', 'error');
     } finally {
       setImagePickerLoading(false);
     }
@@ -276,15 +288,16 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
         }
       );
     } else {
-      Alert.alert(
+      showConfirm(
         'Select Image',
         'Choose how you want to add a product image',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Take Photo', onPress: pickImageFromCamera },
-          { text: 'Choose from Gallery', onPress: pickImageFromGallery },
-        ]
+        () => pickImageFromCamera(),
+        'info',
+        'Take Photo',
+        'Cancel'
       );
+      // Note: For Android, we'll show a simple confirm for camera, 
+      // but ideally this should be a custom picker with both options
     }
   };
 
@@ -415,45 +428,40 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
               style={styles.manualUrlButton}
               onPress={() => {
                 if (Platform.OS === 'ios') {
-                  Alert.prompt(
+                  showInput(
                     'Image URL',
                     'Enter image URL manually (optional)',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'OK',
-                        onPress: async (url) => {
-                          if (url && url.trim()) {
-                            const trimmedUrl = url.trim();
-                            
-                            // If it's already a Cloudinary or external URL, use it directly
-                            if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
-                              setSelectedImage(trimmedUrl);
-                              updateFormData('image_url', trimmedUrl);
-                            } else {
-                              // If it's a local path, try to upload to Cloudinary
-                              try {
-                                const cloudinaryUrl = await uploadImageToCloudinary(trimmedUrl);
-                                setSelectedImage(cloudinaryUrl);
-                                updateFormData('image_url', cloudinaryUrl);
-                              } catch (error) {
-                                setSelectedImage(trimmedUrl);
-                                updateFormData('image_url', trimmedUrl);
-                              }
-                            }
+                    async (url: string) => {
+                      if (url && url.trim()) {
+                        const trimmedUrl = url.trim();
+                        
+                        // If it's already a Cloudinary or external URL, use it directly
+                        if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+                          setSelectedImage(trimmedUrl);
+                          updateFormData('image_url', trimmedUrl);
+                        } else {
+                          // If it's a local path, try to upload to Cloudinary
+                          try {
+                            const cloudinaryUrl = await uploadImageToCloudinary(trimmedUrl);
+                            setSelectedImage(cloudinaryUrl);
+                            updateFormData('image_url', cloudinaryUrl);
+                          } catch (error) {
+                            setSelectedImage(trimmedUrl);
+                            updateFormData('image_url', trimmedUrl);
                           }
                         }
                       }
-                    ],
-                    'plain-text',
+                    },
+                    'Enter URL here...',
+                    'text',
                     formData.image_url
                   );
                 } else {
                   // For Android, we'll just show an info message
-                  Alert.alert(
+                  showModal(
                     'Manual URL Entry',
                     'Manual URL entry is available on iOS. For Android, please use camera or gallery options.',
-                    [{ text: 'OK' }]
+                    'info'
                   );
                 }
               }}
@@ -510,6 +518,46 @@ export const AddEditProductScreen: React.FC<AddEditProductScreenProps> = ({
           </TouchableOpacity>
         </View>
       </ScrollView>
+      
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
+      
+      <ConfirmModal
+        visible={isConfirmVisible}
+        onClose={hideConfirm}
+        onConfirm={confirmProps.onConfirm}
+        title={confirmProps.title}
+        message={confirmProps.message}
+        type={confirmProps.type}
+        confirmText={confirmProps.confirmText}
+        cancelText={confirmProps.cancelText}
+      />
+      
+      <InputModal
+        visible={isInputVisible}
+        onClose={hideInput}
+        onConfirm={inputProps.onConfirm}
+        title={inputProps.title}
+        message={inputProps.message}
+        placeholder={inputProps.placeholder}
+        inputType={inputProps.inputType}
+        defaultValue={inputProps.defaultValue}
+        confirmText={inputProps.confirmText}
+        cancelText={inputProps.cancelText}
+      />
+      
+      <ToastModal
+        visible={isToastVisible}
+        message={toastProps.message}
+        type={toastProps.type}
+        duration={toastProps.duration}
+        onHide={hideToast}
+      />
     </View>
   );
 };

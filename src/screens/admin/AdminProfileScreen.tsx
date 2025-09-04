@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   RefreshControl,
 } from 'react-native';
 import { APP_CONSTANTS } from '../../utils/constants';
@@ -14,6 +13,10 @@ import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { logoutUser } from '../../store/authSlice';
 import { supabase } from '../../services/supabase';
 import { adminService, AdminStats } from '../../services/adminService';
+import { useModal } from '../../hooks/useModal';
+import CustomModal from '../../components/modals/CustomModal';
+import ConfirmModal from '../../components/modals/ConfirmModal';
+import ToastModal from '../../components/modals/ToastModal';
 
 interface AdminProfileScreenProps {
   navigation: any;
@@ -22,6 +25,19 @@ interface AdminProfileScreenProps {
 export const AdminProfileScreen: React.FC<AdminProfileScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+
+  // Modal hook for managing all modal states
+  const {
+    showModal,
+    showConfirm,
+    isModalVisible,
+    modalProps,
+    hideModal,
+    isConfirmVisible,
+    confirmProps,
+    hideConfirm,
+  } = useModal();
+
   const [systemStatus, setSystemStatus] = useState({
     database: 'checking',
     lastUpdate: new Date().toLocaleString('en-IN'),
@@ -124,38 +140,34 @@ export const AdminProfileScreen: React.FC<AdminProfileScreenProps> = ({ navigati
       title: 'Edit Profile',
       subtitle: 'Update personal information',
       icon: 'person-outline' as keyof typeof Ionicons.glyphMap,
-      onPress: () => Alert.alert('Coming Soon', 'Edit profile feature will be available in the next update.'),
+      onPress: () => showModal('Coming Soon', 'Edit profile feature will be available in the next update.', 'info'),
     },
     {
       id: 'change_password',
       title: 'Change Password',
       subtitle: 'Update your password',
       icon: 'key-outline' as keyof typeof Ionicons.glyphMap,
-      onPress: () => Alert.alert('Coming Soon', 'Change password feature will be available in the next update.'),
+      onPress: () => showModal('Coming Soon', 'Change password feature will be available in the next update.', 'info'),
     },
     {
       id: 'notifications',
       title: 'Notification Settings',
       subtitle: 'Manage notification preferences',
       icon: 'notifications-outline' as keyof typeof Ionicons.glyphMap,
-      onPress: () => Alert.alert('Coming Soon', 'Notification settings will be available in the next update.'),
+      onPress: () => showModal('Coming Soon', 'Notification settings will be available in the next update.', 'info'),
     },
   ];
 
   const handleLogout = () => {
-    Alert.alert(
+    showConfirm(
       'Logout',
       'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: () => {
-            dispatch(logoutUser());
-          },
-        },
-      ]
+      () => {
+        dispatch(logoutUser());
+      },
+      'warning',
+      'Logout',
+      'Cancel'
     );
   };
 
@@ -317,6 +329,26 @@ export const AdminProfileScreen: React.FC<AdminProfileScreenProps> = ({ navigati
           Fish Market Admin Panel © {new Date().getFullYear()}
         </Text>
       </View>
+
+      {/* Modal Components */}
+      <CustomModal
+        visible={isModalVisible}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+        onClose={hideModal}
+      />
+      
+      <ConfirmModal
+        visible={isConfirmVisible}
+        title={confirmProps.title}
+        message={confirmProps.message}
+        type={confirmProps.type}
+        confirmText={confirmProps.confirmText}
+        cancelText={confirmProps.cancelText}
+        onConfirm={confirmProps.onConfirm}
+        onClose={hideConfirm}
+      />
     </ScrollView>
   );
 };

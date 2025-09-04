@@ -5,7 +5,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
   RefreshControl,
   Modal,
   TextInput,
@@ -14,6 +13,10 @@ import { APP_CONSTANTS } from '../../utils/constants';
 import { Ionicons } from '@expo/vector-icons';
 import { Order, orderService } from '../../services/orderService';
 import { adminService } from '../../services/adminService';
+import { useModal } from '../../hooks/useModal';
+import CustomModal from '../../components/modals/CustomModal';
+import ConfirmModal from '../../components/modals/ConfirmModal';
+import ToastModal from '../../components/modals/ToastModal';
 
 interface OrderManagementScreenProps {
   navigation: any;
@@ -39,6 +42,22 @@ export const OrderManagementScreen: React.FC<OrderManagementScreenProps> = ({
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [enteredVerificationCode, setEnteredVerificationCode] = useState('');
+
+  // Modal hook for managing all modal states
+  const {
+    showModal,
+    showConfirm,
+    showToast,
+    isModalVisible,
+    modalProps,
+    hideModal,
+    isConfirmVisible,
+    confirmProps,
+    hideConfirm,
+    isToastVisible,
+    toastProps,
+    hideToast,
+  } = useModal();
 
   const statusFilters = [
     { key: 'all', label: 'All Orders', color: '#757575' },
@@ -80,7 +99,7 @@ export const OrderManagementScreen: React.FC<OrderManagementScreenProps> = ({
       const data = await orderService.getAllOrders();
       setOrders(data);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to fetch orders');
+      showModal('Error', error.message || 'Failed to fetch orders', 'error');
     } finally {
       setLoading(false);
     }
@@ -130,17 +149,17 @@ export const OrderManagementScreen: React.FC<OrderManagementScreenProps> = ({
       // If updating from "out for delivery" to "delivered", verify the code
       if (selectedOrder.status === 'out_for_delivery' && newStatus === 'delivered') {
         if (!enteredVerificationCode.trim()) {
-          Alert.alert('Error', 'Please enter the verification code provided by the customer');
+          showModal('Error', 'Please enter the verification code provided by the customer', 'error');
           return;
         }
 
         if (!selectedOrder.verification_code) {
-          Alert.alert('Error', 'No verification code found for this order');
+          showModal('Error', 'No verification code found for this order', 'error');
           return;
         }
 
         if (enteredVerificationCode.trim() !== selectedOrder.verification_code) {
-          Alert.alert('Error', 'Invalid verification code. Please check with the customer.');
+          showModal('Error', 'Invalid verification code. Please check with the customer.', 'error');
           return;
         }
       }
@@ -171,19 +190,68 @@ export const OrderManagementScreen: React.FC<OrderManagementScreenProps> = ({
       
       // Show verification code to admin when marking as "out for delivery"
       if (newStatus === 'out_for_delivery' && verificationCode) {
-        Alert.alert(
-          'Order Ready for Delivery', 
+        showModal(
+          'Order Ready for Delivery',
           `Verification Code: ${verificationCode}\n\n✅ This code has been generated for the customer\n✅ Customer can see this code in their order history\n✅ Ask customer for this code before handing over the order\n\nThe delivery person should verify the customer provides this exact code.`,
-          [{ text: 'Got It' }]
+          'success'
         );
       } else if (newStatus === 'delivered') {
-        Alert.alert('✅ Order Delivered', `Order ${selectedOrder.id} has been successfully delivered to the customer.`);
+        showToast(`✅ Order ${selectedOrder.id} has been successfully delivered to the customer.`, 'success');
       } else {
-        Alert.alert('Success', `Order ${selectedOrder.id} status updated to ${getStatusDisplayName(newStatus)}`);
+        showToast(`Order ${selectedOrder.id} status updated to ${getStatusDisplayName(newStatus)}`, 'success');
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update order status');
+      showModal('Error', error.message || 'Failed to update order status', 'error');
     }
+  };
+
+  const handleViewOrderDetails = (order: Order) => {
+    // Create formatted order details text
+    const orderDetails = `
+📋 ORDER DETAILS
+================
+
+🆔 Order ID: ${order.id}
+📅 Order Date: ${formatDateTime(order.created_at)}
+👤 Customer ID: ${order.customer_id}
+
+💰 PAYMENT INFO:
+• Total Amount: ₹${order.total_amount}
+• Payment Method: ${order.payment_method.toUpperCase()}
+• Payment Status: ${order.payment_status.toUpperCase()}
+
+📍 DELIVERY ADDRESS:
+${typeof order.delivery_address === 'object' ? 
+  `• ${order.delivery_address.street || ''}
+• ${order.delivery_address.area || ''}, ${order.delivery_address.city || ''}
+• PIN: ${order.delivery_address.pincode || ''}
+• Landmark: ${order.delivery_address.landmark || 'None'}` : 
+  order.delivery_address}
+
+📞 Delivery Phone: ${order.delivery_phone || 'Not provided'}
+
+📝 NOTES:
+${order.delivery_notes || 'No special instructions'}
+
+${order.verification_code ? `🔐 Verification Code: ${order.verification_code}` : ''}
+
+${order.delivery_date ? `🚚 Delivery Date: ${formatDateTime(order.delivery_date)}` : ''}
+
+📊 Current Status: ${getStatusDisplayName(order.status)}
+⏰ Last Updated: ${formatDateTime(order.updated_at)}
+    `.trim();
+
+    showConfirm(
+      '📋 Order Details',
+      orderDetails,
+      () => {
+        // In a real app, this would open the phone dialer
+        showModal('Call Customer', `Would call: ${order.delivery_phone}`, 'info');
+      },
+      'info',
+      'Call Customer',
+      'Close'
+    );
   };
 
   const formatDateTime = (dateString: string) => {
@@ -275,7 +343,7 @@ export const OrderManagementScreen: React.FC<OrderManagementScreenProps> = ({
         <View style={styles.orderActions}>
           <TouchableOpacity
             style={styles.viewDetailsButton}
-            onPress={() => navigation.navigate('OrderDetails', { order: item })}
+            onPress={() => handleViewOrderDetails(item)}
           >
             <Text style={styles.viewDetailsButtonText}>View Details</Text>
           </TouchableOpacity>
@@ -406,6 +474,33 @@ export const OrderManagementScreen: React.FC<OrderManagementScreenProps> = ({
       />
 
       {renderUpdateModal()}
+
+      {/* Modal Components */}
+      <CustomModal
+        visible={isModalVisible}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+        onClose={hideModal}
+      />
+      
+      <ConfirmModal
+        visible={isConfirmVisible}
+        title={confirmProps.title}
+        message={confirmProps.message}
+        type={confirmProps.type}
+        confirmText={confirmProps.confirmText}
+        cancelText={confirmProps.cancelText}
+        onConfirm={confirmProps.onConfirm}
+        onClose={hideConfirm}
+      />
+      
+      <ToastModal
+        visible={isToastVisible}
+        message={toastProps.message}
+        type={toastProps.type}
+        onHide={hideToast}
+      />
     </View>
   );
 };
