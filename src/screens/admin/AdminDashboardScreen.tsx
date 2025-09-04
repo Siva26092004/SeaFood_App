@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { APP_CONSTANTS } from '../../utils/constants';
 import { Ionicons } from '@expo/vector-icons';
 import { adminService, AdminStats, RecentActivity } from '../../services/adminService';
+import { CustomModal } from '../../components/modals';
+import { useModal } from '../../hooks/useModal';
 
 interface DashboardCard {
   title: string;
@@ -17,6 +19,7 @@ interface AdminDashboardScreenProps {
 }
 
 export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navigation }) => {
+  const { showModal, isModalVisible, modalProps, hideModal } = useModal();
   const [stats, setStats] = useState<AdminStats>({
     totalOrders: 0,
     totalProducts: 0,
@@ -44,7 +47,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
       setStats(statsData);
       setRecentActivity(activityData);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to fetch dashboard data');
+      showModal('Error', error.message || 'Failed to fetch dashboard data', 'error');
     } finally {
       setLoading(false);
     }
@@ -202,6 +205,14 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ navi
           )}
         </View>
       </View>
+      
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
     </ScrollView>
   );
 };

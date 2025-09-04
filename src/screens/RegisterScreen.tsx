@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,12 +18,15 @@ import { RegisterCredentials } from '../types/auth';
 import { AuthStackParamList } from '../types/navigation';
 import { APP_CONSTANTS } from '../utils/constants';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { CustomModal } from '../components/modals';
+import { useModal } from '../hooks/useModal';
 
 type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { isLoading, error, isAuthenticated } = useAppSelector((state) => state.auth);
+  const { showModal, isModalVisible, modalProps, hideModal } = useModal();
   
   const [formData, setFormData] = useState({
     full_name: '',
@@ -49,7 +51,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   useEffect(() => {
     if (error) {
       console.error('📱 RegisterScreen - Error received:', error);
-      Alert.alert('Registration Failed', error);
+      showModal('Registration Failed', error, 'error');
       dispatch(clearError());
     }
   }, [error]);
@@ -73,25 +75,25 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
     // Validation
     if (!formData.full_name || !formData.email || !formData.phone || !formData.password || !formData.confirmPassword) {
       console.warn('📱 RegisterScreen - Validation failed: Missing fields');
-      Alert.alert('Error', 'Please fill in all fields');
+      showModal('Error', 'Please fill in all fields', 'error');
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
       console.warn('📱 RegisterScreen - Validation failed: Password mismatch');
-      Alert.alert('Error', 'Passwords do not match');
+      showModal('Error', 'Passwords do not match', 'error');
       return;
     }
 
     if (formData.password.length < 6) {
       console.warn('📱 RegisterScreen - Validation failed: Password too short');
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      showModal('Error', 'Password must be at least 6 characters long', 'error');
       return;
     }
 
     if (!formData.acceptTerms) {
       console.warn('📱 RegisterScreen - Validation failed: Terms not accepted');
-      Alert.alert('Error', 'Please accept the terms and conditions');
+      showModal('Error', 'Please accept the terms and conditions', 'error');
       return;
     }
 
@@ -99,7 +101,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       console.warn('📱 RegisterScreen - Validation failed: Invalid email format');
-      Alert.alert('Error', 'Please enter a valid email address');
+      showModal('Error', 'Please enter a valid email address', 'error');
       return;
     }
 
@@ -107,7 +109,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
     const phoneRegex = /^[0-9]{10}$/;
     if (!phoneRegex.test(formData.phone)) {
       console.warn('📱 RegisterScreen - Validation failed: Invalid phone format');
-      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
+      showModal('Error', 'Please enter a valid 10-digit phone number', 'error');
       return;
     }
 
@@ -295,6 +297,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
     </KeyboardAvoidingView>
   );
 };

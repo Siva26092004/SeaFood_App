@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -16,6 +15,10 @@ import { useAppSelector } from '../../hooks/redux';
 import { orderService, Order } from '../../services/orderService';
 import { APP_CONSTANTS } from '../../utils/constants';
 import { CustomerStackParamList } from '../../types/navigation';
+import { useModal } from '../../hooks/useModal';
+import CustomModal from '../../components/modals/CustomModal';
+import ConfirmModal from '../../components/modals/ConfirmModal';
+import ToastModal from '../../components/modals/ToastModal';
 
 type NavigationProp = StackNavigationProp<CustomerStackParamList>;
 
@@ -25,6 +28,14 @@ export const OrderHistoryScreen: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Modal hook for managing all modal states
+  const {
+    showModal,
+    isModalVisible,
+    modalProps,
+    hideModal,
+  } = useModal();
 
   useEffect(() => {
     if (user?.id) {
@@ -42,7 +53,7 @@ export const OrderHistoryScreen: React.FC = () => {
       console.log('✅ OrderHistoryScreen - Orders loaded:', userOrders.length);
     } catch (error: any) {
       console.error('❌ OrderHistoryScreen - Error loading orders:', error);
-      Alert.alert('Error', 'Failed to load orders. Please try again.');
+      showModal('Error', 'Failed to load orders. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -108,7 +119,7 @@ export const OrderHistoryScreen: React.FC = () => {
       style={styles.orderCard}
       onPress={() => {
         // TODO: Navigate to order details
-        Alert.alert('Order Details', `Order #${item.id}\nTotal: ₹${item.total_amount}`);
+        showModal('Order Details', `Order #${item.id}\nTotal: ₹${item.total_amount}`, 'info');
       }}
     >
       <View style={styles.orderHeader}>
@@ -192,6 +203,15 @@ export const OrderHistoryScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Modal Components */}
+      <CustomModal
+        visible={isModalVisible}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+        onClose={hideModal}
+      />
     </View>
   );
 };

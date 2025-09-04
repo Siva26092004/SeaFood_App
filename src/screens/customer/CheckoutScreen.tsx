@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   FlatList,
   Image,
   Switch,
@@ -23,6 +22,8 @@ import { profileService } from '../../services/profileService';
 import { APP_CONSTANTS } from '../../utils/constants';
 import { CustomerStackParamList } from '../../types/navigation';
 import { CartItem } from '../../services/cartService';
+import { CustomModal, ToastModal, ConfirmModal } from '../../components/modals';
+import { useModal } from '../../hooks/useModal';
 
 type NavigationProp = StackNavigationProp<CustomerStackParamList>;
 
@@ -40,6 +41,21 @@ export const CheckoutScreen: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
   const { items, totalPrice, totalItems, isLoading } = useAppSelector((state) => state.cart);
   const { profile, isLoading: profileLoading } = useAppSelector((state) => state.profile);
+
+  const { 
+    showModal, 
+    isModalVisible, 
+    modalProps, 
+    hideModal,
+    showToast, 
+    isToastVisible, 
+    toastProps, 
+    hideToast,
+    showConfirm,
+    isConfirmVisible,
+    confirmProps,
+    hideConfirm
+  } = useModal();
 
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress>({
     street: '',
@@ -106,27 +122,27 @@ export const CheckoutScreen: React.FC = () => {
 
   const validateForm = (): boolean => {
     if (!deliveryAddress.street.trim()) {
-      Alert.alert('Error', 'Please enter your street address');
+      showModal('Error', 'Please enter your street address', 'error');
       return false;
     }
     if (!deliveryAddress.area.trim()) {
-      Alert.alert('Error', 'Please enter your area');
+      showModal('Error', 'Please enter your area', 'error');
       return false;
     }
     if (!deliveryAddress.city.trim()) {
-      Alert.alert('Error', 'Please enter your city');
+      showModal('Error', 'Please enter your city', 'error');
       return false;
     }
     if (!deliveryAddress.pincode.trim()) {
-      Alert.alert('Error', 'Please enter your pincode');
+      showModal('Error', 'Please enter your pincode', 'error');
       return false;
     }
     if (!deliveryPhone.trim()) {
-      Alert.alert('Error', 'Please enter your phone number');
+      showModal('Error', 'Please enter your phone number', 'error');
       return false;
     }
     if (deliveryPhone.length < 10) {
-      Alert.alert('Error', 'Please enter a valid phone number');
+      showModal('Error', 'Please enter a valid phone number', 'error');
       return false;
     }
     return true;
@@ -135,7 +151,7 @@ export const CheckoutScreen: React.FC = () => {
   const handlePlaceOrder = async () => {
     if (!validateForm()) return;
     if (items.length === 0) {
-      Alert.alert('Error', 'Your cart is empty');
+      showModal('Error', 'Your cart is empty', 'warning');
       return;
     }
 
@@ -180,34 +196,32 @@ export const CheckoutScreen: React.FC = () => {
         console.log('✅ CheckoutScreen - Cart cleared successfully');
       }
 
-      Alert.alert(
+      showConfirm(
         'Order Placed Successfully!',
         `Your order #${order.verification_code} for ₹${totalPrice.toFixed(2)} has been placed. You will receive a confirmation shortly.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [
-                  {
-                    name: 'CustomerTabs',
-                    state: {
-                      routes: [
-                        { name: 'Orders' }
-                      ]
-                    }
-                  }
-                ]
-              });
-            }
-          }
-        ]
+        () => {
+          navigation.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'CustomerTabs',
+                state: {
+                  routes: [
+                    { name: 'Orders' }
+                  ]
+                }
+              }
+            ]
+          });
+        },
+        'info',
+        'View Orders',
+        'OK'
       );
 
     } catch (error: any) {
       console.error('❌ CheckoutScreen - Order placement failed:', error);
-      Alert.alert('Error', error.message || 'Failed to place order. Please try again.');
+      showModal('Error', error.message || 'Failed to place order. Please try again.', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -420,6 +434,33 @@ export const CheckoutScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </View>
+      
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
+      
+      <ConfirmModal
+        visible={isConfirmVisible}
+        onClose={hideConfirm}
+        onConfirm={confirmProps.onConfirm}
+        title={confirmProps.title}
+        message={confirmProps.message}
+        type={confirmProps.type}
+        confirmText={confirmProps.confirmText}
+        cancelText={confirmProps.cancelText}
+      />
+      
+      <ToastModal
+        visible={isToastVisible}
+        message={toastProps.message}
+        type={toastProps.type}
+        duration={toastProps.duration}
+        onHide={hideToast}
+      />
     </ScrollView>
   );
 };

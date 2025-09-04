@@ -6,7 +6,6 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { RouteProp } from '@react-navigation/native';
@@ -15,6 +14,10 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { APP_CONSTANTS } from '../../utils/constants';
 import { CustomerStackParamList } from '../../types/navigation';
 import { Product as ProductType, productService } from '../../services/productService';
+import { cartService } from '../../services/cartService';
+import { useAppSelector } from '../../hooks/redux';
+import { CustomModal, ToastModal, ConfirmModal } from '../../components/modals';
+import { useModal } from '../../hooks/useModal';
 
 type ProductDetailRouteProp = RouteProp<CustomerStackParamList, 'ProductDetail'>;
 
@@ -22,10 +25,27 @@ export const ProductDetailScreen: React.FC = () => {
   const route = useRoute<ProductDetailRouteProp>();
   const navigation = useNavigation();
   const { productId } = route.params;
+  const { user } = useAppSelector((state) => state.auth);
+  
+  const { 
+    showModal, 
+    isModalVisible, 
+    modalProps, 
+    hideModal,
+    showToast, 
+    isToastVisible, 
+    toastProps, 
+    hideToast,
+    showConfirm,
+    isConfirmVisible,
+    confirmProps,
+    hideConfirm
+  } = useModal();
 
   const [product, setProduct] = useState<ProductType | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [addingToCart, setAddingToCart] = useState(false);
 
   useEffect(() => {
     console.log('📱 ProductDetailScreen - Loading product:', productId);
@@ -42,12 +62,12 @@ export const ProductDetailScreen: React.FC = () => {
         console.log('✅ ProductDetailScreen - Product loaded:', fetchedProduct.name);
       } else {
         console.error('❌ ProductDetailScreen - Product not found:', productId);
-        Alert.alert('Error', 'Product not found');
+        showModal('Error', 'Product not found', 'error');
         navigation.goBack();
       }
     } catch (error) {
       console.error('❌ ProductDetailScreen - Error loading product:', error);
-      Alert.alert('Error', 'Failed to load product details');
+      showModal('Error', 'Failed to load product details', 'error');
     } finally {
       setLoading(false);
     }
@@ -60,18 +80,45 @@ export const ProductDetailScreen: React.FC = () => {
     }
   };
 
-  const handleAddToCart = () => {
-    console.log('🛒 ProductDetailScreen - Adding to cart:', {
-      productId: product?.id,
-      quantity,
-      price: product?.price
-    });
-    
-    Alert.alert(
-      'Added to Cart',
-      `${quantity}x ${product?.name} has been added to your cart.`,
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
+  const handleAddToCart = async () => {
+    if (!product || !user?.id) {
+      showModal('Error', 'Please log in to add items to cart', 'error');
+      return;
+    }
+
+    if (addingToCart) return; // Prevent multiple clicks
+
+    try {
+      setAddingToCart(true);
+      console.log('🛒 ProductDetailScreen - Adding to cart:', {
+        productId: product.id,
+        quantity,
+        price: product.price
+      });
+
+      await cartService.addToCart(user.id, {
+        product_id: product.id,
+        quantity: quantity
+      });
+
+      showConfirm(
+        'Added to Cart',
+        `${quantity}x ${product.name} has been added to your cart.`,
+        () => {
+          // Navigate to Cart if it exists in navigation
+          // For now, just go back - can be updated when Cart screen is added
+          navigation.goBack();
+        },
+        'info',
+        'View Cart',
+        'Continue Shopping'
+      );
+    } catch (error: any) {
+      console.error('❌ ProductDetailScreen - Error adding to cart:', error);
+      showModal('Error', 'Failed to add item to cart. Please try again.', 'error');
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   if (loading) {
@@ -172,12 +219,45 @@ export const ProductDetailScreen: React.FC = () => {
             </View>
           </View>
           
-          <TouchableOpacity style={styles.addToCartButton} onPress={handleAddToCart}>
+          <TouchableOpacity 
+            style={[styles.addToCartButton, { opacity: addingToCart ? 0.7 : 1 }]} 
+            onPress={handleAddToCart}
+            disabled={addingToCart}
+          >
             <Icon name="cart" size={20} color="#FFFFFF" />
-            <Text style={styles.addToCartText}>Add to Cart - ₹{(product.price * quantity).toFixed(2)}</Text>
+            <Text style={styles.addToCartText}>
+              {addingToCart ? 'Adding...' : `Add to Cart - ₹${(product.price * quantity).toFixed(2)}`}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
+      
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
+      
+      <ConfirmModal
+        visible={isConfirmVisible}
+        onClose={hideConfirm}
+        onConfirm={confirmProps.onConfirm}
+        title={confirmProps.title}
+        message={confirmProps.message}
+        type={confirmProps.type}
+        confirmText={confirmProps.confirmText}
+        cancelText={confirmProps.cancelText}
+      />
+      
+      <ToastModal
+        visible={isToastVisible}
+        message={toastProps.message}
+        type={toastProps.type}
+        duration={toastProps.duration}
+        onHide={hideToast}
+      />
     </View>
   );
 };

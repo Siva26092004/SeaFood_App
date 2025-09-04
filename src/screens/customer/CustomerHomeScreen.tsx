@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -16,6 +15,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { useAppSelector, useAppDispatch } from '../../hooks/redux';
 import { APP_CONSTANTS } from '../../utils/constants';
 import { CustomerStackParamList } from '../../types/navigation';
+import { CustomModal } from '../../components/modals';
+import { useModal } from '../../hooks/useModal';
 
 type NavigationProp = StackNavigationProp<CustomerStackParamList>;
 
@@ -32,6 +33,7 @@ export const CustomerHomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  const { showModal, isModalVisible, modalProps, hideModal } = useModal();
 
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,7 +79,7 @@ export const CustomerHomeScreen: React.FC = () => {
       console.log('✅ CustomerHomeScreen - Featured products loaded:', mockProducts.length);
     } catch (error) {
       console.error('❌ CustomerHomeScreen - Error loading products:', error);
-      Alert.alert('Error', 'Failed to load products. Please try again.');
+      showModal('Error', 'Failed to load products. Please try again.', 'error');
     }
   };
 
@@ -195,6 +197,14 @@ export const CustomerHomeScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+      
+      <CustomModal
+        visible={isModalVisible}
+        onClose={hideModal}
+        title={modalProps.title}
+        message={modalProps.message}
+        type={modalProps.type}
+      />
     </ScrollView>
   );
 };
