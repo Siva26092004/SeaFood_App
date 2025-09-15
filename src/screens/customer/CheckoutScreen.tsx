@@ -31,6 +31,7 @@ interface DeliveryAddress {
   street: string;
   area: string;
   city: string;
+  state: string;
   pincode: string;
   landmark?: string;
 }
@@ -61,6 +62,7 @@ export const CheckoutScreen: React.FC = () => {
     street: '',
     area: '',
     city: '',
+    state: '',
     pincode: '',
     landmark: '',
   });
@@ -73,6 +75,7 @@ export const CheckoutScreen: React.FC = () => {
 
   useEffect(() => {
     if (user?.id) {
+      console.log('🔄 CheckoutScreen - Fetching cart and profile for user:', user.id);
       dispatch(fetchCartItems(user.id));
       dispatch(fetchProfile(user.id));
     }
@@ -80,18 +83,78 @@ export const CheckoutScreen: React.FC = () => {
 
   // Load saved address when profile is fetched
   useEffect(() => {
+    console.log('🏠 CheckoutScreen - Profile changed:', {
+      hasProfile: !!profile,
+      hasCompleteAddress: profile ? profileService.hasCompleteAddress(profile) : false,
+      profileData: profile ? {
+        street: profile.address_line1,
+        area: profile.address_line2,
+        city: profile.city,
+        state: profile.state,
+        pincode: profile.postal_code,
+        phone: profile.phone
+      } : null
+    });
+
     if (profile && profileService.hasCompleteAddress(profile)) {
       console.log('🏠 CheckoutScreen - Loading saved address from profile');
       setDeliveryAddress({
         street: profile.address_line1 || '',
         area: profile.address_line2 || '',
         city: profile.city || '',
+        state: profile.state || '',
         pincode: profile.postal_code || '',
         landmark: profile.landmark || '',
       });
       setDeliveryPhone(profile.phone || user?.phone || '');
+      // Removed automatic toast to reduce UI noise
+    } else if (profile) {
+      console.log('🏠 CheckoutScreen - Profile exists but address is incomplete');
+      // Load any available partial address data
+      setDeliveryAddress({
+        street: profile.address_line1 || '',
+        area: profile.address_line2 || '',
+        city: profile.city || '',
+        state: profile.state || '',
+        pincode: profile.postal_code || '',
+        landmark: profile.landmark || '',
+      });
+      if (profile.phone) {
+        setDeliveryPhone(profile.phone);
+      }
     }
   }, [profile, user?.phone]);
+
+  const loadSavedAddress = () => {
+    if (profile && profileService.hasCompleteAddress(profile)) {
+      console.log('🏠 CheckoutScreen - Manually loading saved address from profile');
+      setDeliveryAddress({
+        street: profile.address_line1 || '',
+        area: profile.address_line2 || '',
+        city: profile.city || '',
+        state: profile.state || '',
+        pincode: profile.postal_code || '',
+        landmark: profile.landmark || '',
+      });
+      setDeliveryPhone(profile.phone || user?.phone || '');
+      showToast('Address loaded from profile', 'success');
+    }
+  };
+
+  const clearAddress = () => {
+    setDeliveryAddress({
+      street: '',
+      area: '',
+      city: '',
+      state: '',
+      pincode: '',
+      landmark: '',
+    });
+    setDeliveryPhone(user?.phone || '');
+    showToast('Address cleared', 'info');
+  };
+
+
 
   const handleAddressChange = (field: keyof DeliveryAddress, value: string) => {
     setDeliveryAddress(prev => ({ ...prev, [field]: value }));
@@ -108,6 +171,7 @@ export const CheckoutScreen: React.FC = () => {
           address_line1: deliveryAddress.street,
           address_line2: deliveryAddress.area,
           city: deliveryAddress.city,
+          state: deliveryAddress.state,
           postal_code: deliveryAddress.pincode,
           landmark: deliveryAddress.landmark,
           phone: deliveryPhone,
@@ -131,6 +195,10 @@ export const CheckoutScreen: React.FC = () => {
     }
     if (!deliveryAddress.city.trim()) {
       showModal('Error', 'Please enter your city', 'error');
+      return false;
+    }
+    if (!deliveryAddress.state.trim()) {
+      showModal('Error', 'Please enter your state', 'error');
       return false;
     }
     if (!deliveryAddress.pincode.trim()) {
@@ -284,13 +352,67 @@ export const CheckoutScreen: React.FC = () => {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Delivery Address</Text>
-          {profile && profileService.hasCompleteAddress(profile) && (
-            <View style={styles.savedAddressIndicator}>
-              <Icon name="checkmark-circle" size={16} color={APP_CONSTANTS.COLORS.SUCCESS} />
-              <Text style={styles.savedAddressText}>Saved</Text>
-            </View>
-          )}
+          <View style={styles.headerActions}>
+            {profileLoading && (
+              <View style={styles.loadingIndicator}>
+                <Text style={styles.loadingText}>Loading...</Text>
+              </View>
+            )}
+            {profile && profileService.hasCompleteAddress(profile) && (
+              <View style={styles.savedAddressIndicator}>
+                <Icon name="checkmark-circle" size={16} color={APP_CONSTANTS.COLORS.SUCCESS} />
+                <Text style={styles.savedAddressText}>Saved</Text>
+              </View>
+            )}
+            <TouchableOpacity 
+              style={styles.refreshButton}
+              onPress={() => {
+                if (user?.id) {
+                  console.log('🔄 CheckoutScreen - Manual profile refresh');
+                  dispatch(fetchProfile(user.id));
+                }
+              }}
+            >
+              <Icon name="refresh" size={16} color={APP_CONSTANTS.COLORS.PRIMARY} />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Address Action Buttons */}
+        <View style={styles.addressActions}>
+          <TouchableOpacity 
+            style={styles.actionButton} 
+            onPress={loadSavedAddress}
+            disabled={!profile || !profileService.hasCompleteAddress(profile)}
+          >
+            <Icon name="refresh" size={16} color={APP_CONSTANTS.COLORS.PRIMARY} />
+            <Text style={styles.actionButtonText}>Use Saved Address</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.clearButton]} 
+            onPress={clearAddress}
+          >
+            <Icon name="close-circle" size={16} color={APP_CONSTANTS.COLORS.ERROR} />
+            <Text style={[styles.actionButtonText, styles.clearButtonText]}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Profile Status Info */}
+        {profile && !profileService.hasCompleteAddress(profile) && (
+          <View style={styles.profileStatus}>
+            <Text style={styles.profileStatusText}>
+              ⚠️ Complete your profile address to auto-fill this form
+            </Text>
+          </View>
+        )}
+
+        {/* Saved Address Preview */}
+        {profile && profileService.hasCompleteAddress(profile) && (
+          <View style={styles.savedAddressPreview}>
+            <Text style={styles.savedAddressTitle}>Saved Address:</Text>
+            <Text style={styles.savedAddressText}>{profileService.formatAddress(profile)}</Text>
+          </View>
+        )}
         
         <TextInput
           style={styles.input}
@@ -318,13 +440,21 @@ export const CheckoutScreen: React.FC = () => {
           />
           <TextInput
             style={[styles.input, styles.halfInput]}
-            placeholder="Pincode"
-            value={deliveryAddress.pincode}
-            onChangeText={(value) => handleAddressChange('pincode', value)}
-            keyboardType="numeric"
+            placeholder="State"
+            value={deliveryAddress.state}
+            onChangeText={(value) => handleAddressChange('state', value)}
             placeholderTextColor={APP_CONSTANTS.COLORS.TEXT_SECONDARY}
           />
         </View>
+        
+        <TextInput
+          style={styles.input}
+          placeholder="Pincode"
+          value={deliveryAddress.pincode}
+          onChangeText={(value) => handleAddressChange('pincode', value)}
+          keyboardType="numeric"
+          placeholderTextColor={APP_CONSTANTS.COLORS.TEXT_SECONDARY}
+        />
         
         <TextInput
           style={styles.input}
@@ -640,5 +770,75 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
     flex: 1,
+  },
+  addressActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: APP_CONSTANTS.COLORS.PRIMARY,
+    backgroundColor: '#FFFFFF',
+    flex: 0.48,
+    justifyContent: 'center',
+  },
+  clearButton: {
+    borderColor: APP_CONSTANTS.COLORS.ERROR,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    color: APP_CONSTANTS.COLORS.PRIMARY,
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  clearButtonText: {
+    color: APP_CONSTANTS.COLORS.ERROR,
+  },
+  savedAddressPreview: {
+    backgroundColor: APP_CONSTANTS.COLORS.LIGHT_GRAY,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: APP_CONSTANTS.COLORS.SUCCESS,
+  },
+  savedAddressTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+    marginBottom: 4,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: '#F0F8FF',
+  },
+  profileStatus: {
+    backgroundColor: '#F8F9FA',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: APP_CONSTANTS.COLORS.BORDER,
+  },
+  profileStatusText: {
+    fontSize: 12,
+    color: APP_CONSTANTS.COLORS.TEXT_SECONDARY,
+    textAlign: 'center',
   },
 });

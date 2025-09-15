@@ -14,7 +14,7 @@ interface ProductState {
 const initialState: ProductState = {
   products: [],
   filteredProducts: [],
-  selectedProduct: null,
+  selectedProduct: null,  
   searchQuery: '',
   selectedCategory: 'all',
   isLoading: false,

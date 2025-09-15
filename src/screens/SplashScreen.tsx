@@ -69,7 +69,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 
       {/* Loading Spinner */}
       <View style={styles.loadingContainer}>
-        <LoadingSpinner color={APP_CONSTANTS.COLORS.WHITE} />
+        <LoadingSpinner color={APP_CONSTANTS.COLORS.WHITE} style={styles.spinnerStyle} />
       </View>
 
       {/* Version */}
@@ -144,5 +144,9 @@ const styles = StyleSheet.create({
     color: APP_CONSTANTS.COLORS.WHITE,
     fontSize: 12,
     opacity: 0.7,
+  },
+  spinnerStyle: {
+    flex: 0,
+    backgroundColor: 'transparent',
   },
 });

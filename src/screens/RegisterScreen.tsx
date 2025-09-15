@@ -363,9 +363,15 @@ const styles = StyleSheet.create({
     borderColor: APP_CONSTANTS.COLORS.BORDER,
     borderRadius: APP_CONSTANTS.SIZES.BORDER_RADIUS,
     backgroundColor: APP_CONSTANTS.COLORS.WHITE,
+    minHeight: APP_CONSTANTS.SIZES.INPUT_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: Platform.OS === 'android' ? 12 : 0,
   },
   picker: {
-    height: APP_CONSTANTS.SIZES.INPUT_HEIGHT,
+    height: Platform.OS === 'ios' ? APP_CONSTANTS.SIZES.INPUT_HEIGHT : 56,
+    color: APP_CONSTANTS.COLORS.TEXT_PRIMARY,
+    backgroundColor: 'transparent',
+    fontSize: 16,
   },
   input: {
     height: APP_CONSTANTS.SIZES.INPUT_HEIGHT,
